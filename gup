@@ -3,15 +3,18 @@
 from argparse import ArgumentParser, FileType
 from os.path import basename
 from requests import post
+from subprocess import check_output
 
 parser = ArgumentParser(description=
     'Upload files to https://gist.github.com/ and print the uploaded url to stdout.'
 )
 parser.add_argument(
-    'file',
-    metavar='FILE',
-    type=FileType('r'),
-    help='file to upload'
+    '-c',
+    '--commit',
+    metavar='COMMIT',
+    type=str,
+    default='HEAD',
+    help='the commit to compare on'
 )
 parser.add_argument(
     '-s',
@@ -37,17 +40,20 @@ parser.add_argument(
 )
 args = parser.parse_args()
 
+contents = {}
+file_names = check_output(['git', 'diff', '--name-only', args.commit])
+
+for name in file_names.splitlines():
+    file_content = check_output(['git', 'diff', args.commit, '--', name])
+    contents[basename(name.decode("utf-8") + ".patch")] = {'content': file_content}
+
 r = post(
     'https://api.github.com/gists',
     headers={'authorization': 'token {}'.format(args.token)},
     json={
       "description": args.description,
       "public": not args.secret,
-      "files": {
-        basename(args.file.name): {
-          "content": args.file.read()
-        }
-      }
+      "files": contents
     }
 )
 
